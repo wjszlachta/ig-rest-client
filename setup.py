@@ -18,7 +18,7 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Python Modules',
+        'Topic :: Office/Business :: Financial',
         'License :: OSI Approved :: ISC License (ISCL)',
         'Programming Language :: Python :: 3'
     ],
