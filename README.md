@@ -17,12 +17,14 @@ from ig_rest_client import IgRestSession
 
 api_key = '...'
 account_id = '...'
-username = '...'
-password = '...'
+rest_api_username = '...'
+rest_api_password = '...'
 
-session = IgRestSession(api_key, account_id, username, password)
+session = IgRestSession(api_key, account_id, rest_api_username, rest_api_password)
 
 print(session.session_details())
+
+session.log_out()
 ```
 
 For live account:
@@ -32,10 +34,12 @@ from ig_rest_client import IgRestSession, IG_REST_TRADING_API_LIVE_URL
 
 api_key = '...'
 account_id = '...'
-username = '...'
-password = '...'
+rest_api_username = '...'
+rest_api_password = '...'
 
-session = IgRestSession(api_key, account_id, username, password, api_url=IG_REST_TRADING_API_LIVE_URL)
+session = IgRestSession(api_key, account_id, rest_api_username, rest_api_password, rest_api_url=IG_REST_TRADING_API_LIVE_URL)
 
 print(session.session_details())
+
+session.log_out()
 ```

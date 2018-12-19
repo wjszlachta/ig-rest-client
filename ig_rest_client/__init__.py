@@ -3,17 +3,20 @@
 # Licensed under the ISC License. See LICENSE file in the project root for full license information.
 
 import json
+import logging
 import time
 from abc import ABCMeta, abstractmethod
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 from urllib.parse import urljoin
 
-from requests import Session
+from requests import request
 
 IG_REST_TRADING_API_LIVE_URL = 'https://api.ig.com/gateway/deal/'
 IG_REST_TRADING_API_DEMO_URL = 'https://demo-api.ig.com/gateway/deal/'
 
 _DEFAULT_TIMEOUT_IN_SECONDS = 10.0
+
+log = logging.getLogger()
 
 
 class AbstractIgRestSession(metaclass=ABCMeta):
@@ -59,28 +62,24 @@ class AbstractIgRestSession(metaclass=ABCMeta):
 
     @abstractmethod
     def _get_account_id(self) -> str:
-        """Get accountId method in interface implementation."""
+        """Get accountId method of interface implementation."""
 
     @abstractmethod
     def _set_account_id(self, account_id: str) -> None:
-        """Set accountId method in interface implementation."""
+        """Set accountId method of interface implementation."""
 
 
 class IgRestSessionUsingVersion2LogIn(AbstractIgRestSession):
     """IG REST trading API session implementation using Version 2 POST /session endpoint to log in."""
 
-    def __init__(self, api_key: str, account_id: str, username: str, password: str, api_url: str = IG_REST_TRADING_API_DEMO_URL,
-                 timeout: Union[None, float, Tuple[float, float]] = _DEFAULT_TIMEOUT_IN_SECONDS, session: Optional[Session] = None):
+    def __init__(self, api_key: str, account_id: str, rest_api_username: str, rest_api_password: str, rest_api_url: str = IG_REST_TRADING_API_DEMO_URL,
+                 rest_api_timeout: Union[None, float, Tuple[float, float]] = _DEFAULT_TIMEOUT_IN_SECONDS):
         self._api_key = api_key
         self._account_id = account_id
-        self._username = username
-        self._password = password
-        self._api_url = api_url
-        self._timeout = timeout
-        if session is None:
-            self._session = Session()
-        else:
-            self._session = session
+        self._rest_api_username = rest_api_username
+        self._rest_api_password = rest_api_password
+        self._rest_api_url = rest_api_url
+        self._rest_api_timeout = rest_api_timeout
 
         self._headers = {'Content-Type': 'application/json',
                          'Accept': 'application/json; charset=UTF-8',
@@ -106,7 +105,7 @@ class IgRestSessionUsingVersion2LogIn(AbstractIgRestSession):
             json_data = json.dumps(data)
         else:
             json_data = None
-        response = self._session.request(method, urljoin(self._api_url, endpoint), params=params, data=json_data, headers=my_headers, timeout=self._timeout)
+        response = request(method, urljoin(self._rest_api_url, endpoint), params=params, data=json_data, headers=my_headers, timeout=self._rest_api_timeout)
 
         if response.ok:
             response_headers = response.headers
@@ -114,24 +113,27 @@ class IgRestSessionUsingVersion2LogIn(AbstractIgRestSession):
                 if authorization_header in response_headers:
                     self._authorization_headers.update({authorization_header: response_headers[authorization_header]})
 
-            return response.json()
+            if response.content:
+                return response.json()
+            else:
+                return {}
         else:
-            print('Request failed:')
-            print(response.status_code)
-            print(response.text)
+            log.error('Request failed')
+            log.error('Status code: %s', response.status_code)
+            log.error('Response text: %s', response.text)
             raise Exception
 
     def _log_in(self) -> None:
-        response = self._session.request('POST', urljoin(self._api_url, 'session'),
-                                         data=json.dumps({'encryptedPassword': False, 'identifier': self._username, 'password': self._password}),
-                                         headers={**self._headers, 'Version': '2'}, timeout=self._timeout)
+        response = request('POST', urljoin(self._rest_api_url, 'session'),
+                           data=json.dumps({'encryptedPassword': False, 'identifier': self._rest_api_username, 'password': self._rest_api_password}),
+                           headers={**self._headers, 'Version': '2'}, timeout=self._rest_api_timeout)
         if response.ok:
             response_json = response.json()
             response_headers = response.headers
         else:
-            print('Failed to log in:')
-            print(response.status_code)
-            print(response.text)
+            log.error('Failed to log in')
+            log.error('Status code: %s', response.status_code)
+            log.error('Response text: %s', response.text)
             raise Exception
 
         self._authorization_headers = {'CST': response_headers['CST'],
@@ -144,18 +146,14 @@ class IgRestSessionUsingVersion2LogIn(AbstractIgRestSession):
 class IgRestSessionUsingVersion3LogIn(AbstractIgRestSession):
     """IG REST trading API session implementation using Version 3 POST /session endpoint to log in."""
 
-    def __init__(self, api_key: str, account_id: str, username: str, password: str, api_url: str = IG_REST_TRADING_API_DEMO_URL,
-                 timeout: Union[None, float, Tuple[float, float]] = _DEFAULT_TIMEOUT_IN_SECONDS, session: Optional[Session] = None):
+    def __init__(self, api_key: str, account_id: str, rest_api_username: str, rest_api_password: str, rest_api_url: str = IG_REST_TRADING_API_DEMO_URL,
+                 rest_api_timeout: Union[None, float, Tuple[float, float]] = _DEFAULT_TIMEOUT_IN_SECONDS):
         self._api_key = api_key
         self._account_id = account_id
-        self._username = username
-        self._password = password
-        self._api_url = api_url
-        self._timeout = timeout
-        if session is None:
-            self._session = Session()
-        else:
-            self._session = session
+        self._rest_api_username = rest_api_username
+        self._rest_api_password = rest_api_password
+        self._rest_api_api_url = rest_api_url
+        self._rest_api_timeout = rest_api_timeout
 
         self._headers = {'Content-Type': 'application/json',
                          'Accept': 'application/json; charset=UTF-8',
@@ -175,10 +173,10 @@ class IgRestSessionUsingVersion3LogIn(AbstractIgRestSession):
     def _time_when_request_completes(self) -> float:
         time_now = time.monotonic()
 
-        if isinstance(self._timeout, float):
-            return time_now + self._timeout
-        elif isinstance(self._timeout, int):
-            return time_now + float(self._timeout)
+        if isinstance(self._rest_api_timeout, float):
+            return time_now + self._rest_api_timeout
+        elif isinstance(self._rest_api_timeout, int):
+            return time_now + float(self._rest_api_timeout)
         else:
             return time_now + _DEFAULT_TIMEOUT_IN_SECONDS
 
@@ -197,25 +195,29 @@ class IgRestSessionUsingVersion3LogIn(AbstractIgRestSession):
             json_data = json.dumps(data)
         else:
             json_data = None
-        response = self._session.request(method, urljoin(self._api_url, endpoint), params=params, data=json_data, headers=my_headers, timeout=self._timeout)
+        response = request(method, urljoin(self._rest_api_api_url, endpoint), params=params, data=json_data, headers=my_headers, timeout=self._rest_api_timeout)
 
         if response.ok:
-            return response.json()
+            if response.content:
+                return response.json()
+            else:
+                return {}
         else:
-            print('Request failed:')
-            print(response.status_code)
-            print(response.text)
+            log.error('Request failed')
+            log.error('Status code: %s', response.status_code)
+            log.error('Response text: %s', response.text)
             raise Exception
 
     def _log_in(self) -> None:
-        response = self._session.request('POST', urljoin(self._api_url, 'session'), data=json.dumps({'identifier': self._username, 'password': self._password}),
-                                         headers={**self._headers, 'Version': '3'}, timeout=self._timeout)
+        response = request('POST', urljoin(self._rest_api_api_url, 'session'),
+                           data=json.dumps({'identifier': self._rest_api_username, 'password': self._rest_api_password}),
+                           headers={**self._headers, 'Version': '3'}, timeout=self._rest_api_timeout)
         if response.ok:
             response_json = response.json()
         else:
-            print('Failed to log in:')
-            print(response.status_code)
-            print(response.text)
+            log.error('Failed to log in')
+            log.error('Status code: %s', response.status_code)
+            log.error('Response text: %s', response.text)
             raise Exception
 
         self._oauth_token = response_json['oauthToken']
@@ -227,15 +229,15 @@ class IgRestSessionUsingVersion3LogIn(AbstractIgRestSession):
             self.switch_session_account(self._account_id)
 
     def _refresh_token(self) -> None:
-        response = self._session.request('POST', urljoin(self._api_url, 'session/refresh-token'),
-                                         data=json.dumps({'refresh_token': self._oauth_token['refresh_token']}), headers={**self._headers, 'Version': '1'},
-                                         timeout=self._timeout)
+        response = request('POST', urljoin(self._rest_api_api_url, 'session/refresh-token'),
+                           data=json.dumps({'refresh_token': self._oauth_token['refresh_token']}), headers={**self._headers, 'Version': '1'},
+                           timeout=self._rest_api_timeout)
         if response.ok:
             response_json = response.json()
         else:
-            print('Failed to refresh token:')
-            print(response.status_code)
-            print(response.text)
+            log.error('Failed to refresh token')
+            log.error('Status code: %s', response.status_code)
+            log.error('Response text: %s', response.text)
             # we assume that both access_token and refresh_token might have expired, so we attempt to log in again
             self._log_in()
             return
