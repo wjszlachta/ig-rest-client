@@ -4,6 +4,14 @@ Small Python library to connect to [IG](https://www.ig.com/) REST trading API (m
 
 ## Installation
 
+To use most recent release:
+
+```bash
+pip install ig-rest-client
+```
+
+To use current master branch:
+
 ```bash
 pip install git+https://github.com/wjszlachta/ig-rest-client.git
 ```
